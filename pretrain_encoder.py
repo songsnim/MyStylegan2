@@ -5,15 +5,13 @@ from my_models import ConvLayer
 
 from torch.utils import data
 from torch.utils.data import DataLoader
-from folder2lmdb import ImageFolderLMDB
+from my_utils.folder2lmdb import ImageFolderLMDB
 from torchvision import transforms
 
 import math
 import args
 
-device = torch.device(f"cuda:{args.gpu_num}" if torch.cuda.is_available() else 'cpu')
-torch.cuda.set_device(device) # change allocation of current GPU
-print(f'cuda device : {device}')
+
 
 def data_sampler(dataset, shuffle, distributed):
     if distributed:
@@ -129,8 +127,9 @@ def evaluate(model, test_loader):
 
 
 if __name__ == '__main__':
-
-    print('GPU device :', device)
+    device = torch.device(f"cuda:{args.gpu_num}" if torch.cuda.is_available() else 'cpu')
+    torch.cuda.set_device(device) # change allocation of current GPU
+    print(f'cuda device : {device}')
 
     my_transform = transforms.Compose(
     [

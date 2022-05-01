@@ -7,10 +7,10 @@ from torch.nn import functional as F
 from torch.utils import data
 
 from op import conv2d_gradfix
-from my_utils.non_leaking import augment, AdaptiveAugment
+from non_leaking import augment, AdaptiveAugment
 
 import torch.distributed as distributed
-from MyStylegan2.my_utils.distributed import get_rank,synchronize,reduce_loss_dict,reduce_sum,get_world_size
+from my_utils.distributed import get_rank,synchronize,reduce_loss_dict,reduce_sum,get_world_size
 from tqdm import tqdm
 import wandb
 from lpips_pytorch import LPIPS, lpips
