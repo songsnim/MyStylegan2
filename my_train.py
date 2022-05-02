@@ -5,6 +5,7 @@ import torch
 from torch import nn, autograd
 from torch.nn import functional as F
 from torch.utils import data
+from my_models import Disentangler
 
 from op import conv2d_gradfix
 from non_leaking import augment, AdaptiveAugment
@@ -74,6 +75,11 @@ def g_nonsaturating_loss(fake_pred):
 
     return loss
 
+def disent_loss(fake_first_styles, first_styles):
+    disent_loss = nn.CrossEntropyLoss()
+    assert fake_first_styles.shape == first_styles.shape
+    return disent_loss(fake_first_styles, first_styles)
+
 def g_path_regularize(fake_img, style, mean_path_length, decay=0.01):
     # y 연산 (random noise image)
     noise = torch.randn_like(fake_img) / math.sqrt(fake_img.shape[2] * fake_img.shape[3])
@@ -128,8 +134,8 @@ def get_accuracy(test_loader, encoder, generator, predictor, device):
     
     return test_accuracy
 
-def train(args, train_loader, test_loader, encoder, generator, discriminator, predictor,
-          recon_optim, p_optim, g_optim, d_optim, g_ema, today, device):
+def train(args, train_loader, test_loader, encoder, generator, discriminator, predictor, disentangler,
+          recon_optim, p_optim, g_optim, d_optim, disent_optim, g_ema, today, device):
     train_loader = sample_data(train_loader)
     test_loader = sample_data(test_loader)
     
@@ -154,12 +160,14 @@ def train(args, train_loader, test_loader, encoder, generator, discriminator, pr
         g_module = generator.module
         d_module = discriminator.module
         p_module = predictor.module 
+        disent_module = disentangler.module
         
     elif args.ipynb:
         e_module = encoder
         g_module = generator
         d_module = discriminator
         p_module = predictor
+        disent_module = disentangler
         
     
     accum = 0.5 ** (32 / (10*1000))
@@ -181,10 +189,12 @@ def train(args, train_loader, test_loader, encoder, generator, discriminator, pr
         real_img, real_label = next(train_loader)
         real_img = real_img.to(device) ; real_label = real_label.to(device)
         
+        requires_grad(disentangler, False)
+        requires_grad(encoder, False)
+        
         """===============================Train Discriminator================================== """
         
         requires_grad(generator, False)
-        requires_grad(encoder, False)
         requires_grad(discriminator, True)
         requires_grad(predictor, False)
         
@@ -237,17 +247,13 @@ def train(args, train_loader, test_loader, encoder, generator, discriminator, pr
         """ ==================================train Generator================================== """
         
         requires_grad(generator, True)
-        requires_grad(encoder,False)
         requires_grad(discriminator, False)
         requires_grad(predictor, True)
-        
-        
-        _, feat_list = encoder(real_img)
-        fake_img, styles = generator(feat_list)
+        g_optim.zero_grad()
+        p_optim.zero_grad()
         
         _, fake_feat_list = encoder(fake_img)
         _, fake_styles = generator(fake_feat_list)
-        
         w1 = torch.tensor([1,1,1], device=device)
         recon_loss = w1[0]*img_recon_loss(fake_img, real_img) + \
                     w1[1]*style_recon_loss(styles, fake_styles) + \
@@ -265,11 +271,13 @@ def train(args, train_loader, test_loader, encoder, generator, discriminator, pr
         loss_dict["g"] = g_loss
         
         real_pred_label = predictor(styles)
-        fake_pred_label = predictor(fake_styles)
+        
         
         w2 = torch.tensor([1,1], device=device)
         p_pred_loss = CEloss(real_pred_label, real_label)
         if args.kl_pred_loss:
+
+            fake_pred_label = predictor(fake_styles)
             p_reg_loss = KLDloss(fake_pred_label, real_pred_label)
             p_loss = w2[0]* p_pred_loss + w2[1]* p_reg_loss
         else:
@@ -284,8 +292,9 @@ def train(args, train_loader, test_loader, encoder, generator, discriminator, pr
         recon_loss.detach()
         recon_loss.backward(retain_graph=True)
         g_loss.detach()
+        g_loss.requires_grad_(True)
         g_loss.backward(retain_graph=True)
-        p_loss.backward(retain_graph=True)
+        p_loss.backward()
         
         recon_optim.step()
         g_optim.step()
@@ -325,6 +334,36 @@ def train(args, train_loader, test_loader, encoder, generator, discriminator, pr
             accumulate(g_ema, generator, accum)
         
         
+        """ ================================== train Disentangler =================================="""
+        # input으로 fake_img, output으로 predicted discriminatives
+        requires_grad(disentangler, True)
+        requires_grad(generator, True)
+        requires_grad(predictor, False)
+        
+        disent_optim.zero_grad()
+        
+        
+        first_styles = styles[0][:,0].unsqueeze(1)
+        for idx in range(len(styles)):
+            if idx != 0:
+                first_styles = torch.cat((first_styles, styles[idx][:,0].unsqueeze(1)), dim=1)
+
+        
+        pred_first_styles = disentangler(fake_img)
+        
+        disentangle_loss = disent_loss(pred_first_styles, first_styles)
+        
+        generator.zero_grad()
+        disentangler.zero_grad()
+        # disentangle_loss.detach()
+        disentangle_loss.clone().backward()
+        
+        disent_optim.step()
+        
+        loss_dict["disentangle_loss"] = disentangle_loss
+        
+        
+        
         """ ================================== logging =================================="""
         loss_reduced = reduce_loss_dict(loss_dict)
         
@@ -337,6 +376,7 @@ def train(args, train_loader, test_loader, encoder, generator, discriminator, pr
         real_score_val = loss_reduced["real_score"].mean().item()
         fake_score_val = loss_reduced["fake_score"].mean().item()
         path_length_val = loss_reduced["path_length"].mean().item()
+        disentangle_loss_val = loss_reduced["disentangle_loss"].mean().item()
         
         if get_rank() == 0:
             pbar.set_description(
@@ -362,6 +402,7 @@ def train(args, train_loader, test_loader, encoder, generator, discriminator, pr
                         "Real Score": real_score_val,
                         "Fake Score": fake_score_val,
                         "Path Length": path_length_val,
+                        "Disent Loss": disentangle_loss_val
                     }
                 )
             
@@ -383,6 +424,7 @@ def train(args, train_loader, test_loader, encoder, generator, discriminator, pr
                         "g": g_module.state_dict(),
                         "d": d_module.state_dict(),
                         "p": p_module.state_dict(),
+                        "disent": disent_module.state_dict(),
                         "g_ema": g_ema.state_dict(),
                         "recon_optim": recon_optim.state_dict(),
                         "g_optim": g_optim.state_dict(),
@@ -392,5 +434,6 @@ def train(args, train_loader, test_loader, encoder, generator, discriminator, pr
                     },
                     f"checkpoint/{today}_{args.description}/{str(i).zfill(6)}.pt",
                 )
+                
 
 

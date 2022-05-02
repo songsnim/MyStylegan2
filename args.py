@@ -49,6 +49,6 @@ path_batch_shrink = 2
 
 py = False
 ipynb = True
-description = 'with acc log, without KLD'
+description = 'without KLD, disentangler added'
 ckpt = None
 wandb = True
