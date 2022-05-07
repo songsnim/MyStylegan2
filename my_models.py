@@ -37,6 +37,7 @@ def make_kernel(k):
 
 
 class Upsample(nn.Module):
+
     def __init__(self, kernel, factor=2):
         super().__init__()
 
@@ -726,20 +727,29 @@ class Discriminator(nn.Module):
 
 
 class Predictor(nn.Module):
-    def __init__(self, stylespaces):
+    def __init__(self, stylespaces, ratio):
         super().__init__()
+        
         self.spaces = stylespaces
-        self.num_spaces = len(stylespaces)
+        self.ratio = ratio
+        # self.num_spaces = len(stylespaces)
+        
+        self.disc_latents = 0
+        for space in stylespaces:
+            self.disc_latents += space.shape[1] * self.ratio
+        self.disc_latents = int(self.disc_latents)
         self.classifier = nn.Sequential(
-            nn.Linear(self.num_spaces, 128, bias=True), nn.ReLU(),
+            nn.Linear(self.disc_latents, 128, bias=True), nn.ReLU(),
             nn.Linear(128, 2), nn.Softmax()
         )
     
     def forward(self, stylespaces):
-        latent = stylespaces[0][:,0].unsqueeze(1)
+        isolate_index = int(stylespaces[0].shape[1] * self.ratio)
+        latent = stylespaces[0][:,:isolate_index]
         for idx, space in enumerate(stylespaces):
             if idx > 0:
-                next_space = space[:,0].unsqueeze(1)
+                isolate_index = int(space.shape[1] * self.ratio)
+                next_space = space[:,:isolate_index]
                 latent = torch.cat([latent,next_space], dim=1)
         
         return self.classifier(latent)
