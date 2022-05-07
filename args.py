@@ -44,7 +44,7 @@ lr = 0.002
 train_path = "LMDB/CelebA/train"
 test_path = "LMDB/CelebA/test"
 
-disc_latent_ratio = 0.5
+disc_latent_ratio = 0.3
 augment_p = 0
 ada_target = 0.6
 ada_length = 500*1000
@@ -58,6 +58,6 @@ path_batch_shrink = 2
 
 py = False
 ipynb = True
-description = 'after disc_latent_ratio 0.5'
+description = 'after disc_latent_ratio 0.3'
 ckpt = None
 wandb = True
