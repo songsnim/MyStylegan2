@@ -58,6 +58,6 @@ path_batch_shrink = 2
 
 py = False
 ipynb = True
-description = 'style reg, not space reg'
+description = 'after disc_latent_ratio 0.3'
 ckpt = None
 wandb = True
