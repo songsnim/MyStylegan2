@@ -60,4 +60,4 @@ py = False
 ipynb = True
 description = 'style reg, not space reg'
 ckpt = None
-wandb = False
+wandb = True

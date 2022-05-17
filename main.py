@@ -101,7 +101,8 @@ def get_config_from_args(args):
 
 
 if __name__ == '__main__':
-
+    import warnings
+    warnings.filterwarnings(action='ignore')
     today = datetime.date.today()
     device = torch.device(
         f"cuda:{args.gpu_num}" if torch.cuda.is_available() else 'cpu')
@@ -116,11 +117,9 @@ if __name__ == '__main__':
     print(f"n_gpu : {n_gpu}")
     args.distributed = n_gpu >= 2
 
-    print("Importing models...")
     from my_models import *
     from my_train import *
     from pretrain_encoder import ResidualBlock, ResNet
-    print("Importing models done..!")
 
     train_loader, test_loader, image, label = prepare_dataloader(args)
 
