@@ -19,7 +19,7 @@
 # g_reg_every = 16
 # r1 = 10
 # path_regularize = 2
-# path_batch_shrink = 2 
+# path_batch_shrink = 2
 
 # ckpt = None
 # wandb = False
@@ -33,10 +33,10 @@ stylespaces dimensions
 32 x 2
 """
 
-gpu_num = 2 # gpu(A100) index
-iter = 800000 # total iteration
-start_iter = 0 
-batch = 32 
+gpu_num = 2  # gpu(A100) index
+iter = 800000  # total iteration
+start_iter = 0
+batch = 32
 latent = 32
 img_size = 64
 center_crop = 50
@@ -54,10 +54,10 @@ d_reg_every = 16
 g_reg_every = 16
 r1 = 10
 path_regularize = 2
-path_batch_shrink = 2 
+path_batch_shrink = 2
 
 py = False
 ipynb = True
-description = 'after disc_latent_ratio 0.3'
+description = 'style reg, not space reg'
 ckpt = None
-wandb = True
+wandb = False
