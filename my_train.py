@@ -93,7 +93,7 @@ def g_path_regularize(fake_img, style, mean_path_length, decay=0.01):
     grad, = autograd.grad(outputs=(fake_img * noise).sum(),
                           inputs=style, create_graph=True)
     # path length인 ||Jy||_2는 grad의 l2 norm이므로, 제곱의 합의 루트 (실제 구현할 때는 mean 추가)
-    path_lengths = torch.sqrt(grad.pow(2).sum(0).mean())
+    path_lengths = torch.sqrt(grad.pow(2).sum().mean())
 
     # the long running exponential moving average of path length = a 구하기
     path_mean = mean_path_length + decay * \
@@ -109,7 +109,7 @@ def get_sample_for_log(test_image, encoder, generator, g_ema):
     with torch.no_grad():
         g_ema.eval()
         _, feat_list = encoder(test_image)
-        test_sample_ema, styles_ema = g_ema(feat_list)
+        test_sample_ema, styles_ema, space_ema = g_ema(feat_list)
         test_sample, styles, spaces = generator(feat_list)
 
         sample = torch.cat([test_sample[:int(args.batch/2)],

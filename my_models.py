@@ -504,7 +504,6 @@ class Generator(nn.Module):
                 self.style_to_spaces.append(modulation)
 
         self.style_to_spaces = self.style_to_spaces[:-1]
-        # print(len(self.style_to_spaces), len(self.map_to_styles))
 
         assert len(self.style_to_spaces) == (len(self.map_to_styles)*3 - 1)
 
@@ -781,9 +780,8 @@ class Predictor(nn.Module):
         self.spaces = stylespaces
         self.ratio = ratio
         self.disc_latents_size = [32]*9 + [16]*3 + [8]*2
-        # self.num_spaces = len(stylespaces)
-
         self.disc_latents = sum(self.disc_latents_size)
+        self.disc_latents = 160
         # for space in stylespaces:
         #     self.disc_latents += space.shape[1] * self.ratio
         self.classifier = nn.Sequential(
