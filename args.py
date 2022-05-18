@@ -58,6 +58,6 @@ path_batch_shrink = 2
 
 py = False
 ipynb = True
-description = 'style reg, not space reg'
+description = 'space reg without input noise'
 ckpt = None
 wandb = True
