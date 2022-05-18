@@ -93,7 +93,11 @@ def g_path_regularize(fake_img, style, mean_path_length, decay=0.01):
     grad, = autograd.grad(outputs=(fake_img * noise).sum(),
                           inputs=style, create_graph=True)
     # path length인 ||Jy||_2는 grad의 l2 norm이므로, 제곱의 합의 루트 (실제 구현할 때는 mean 추가)
+<<<<<<< HEAD
     path_lengths = torch.sqrt(grad.pow(2).sum(0).mean())
+=======
+    path_lengths = torch.sqrt(grad.pow(2).sum().mean())
+>>>>>>> parent of 6342df0... Revert "disent tried.."
 
     # the long running exponential moving average of path length = a 구하기
     path_mean = mean_path_length + decay * \
@@ -316,7 +320,11 @@ def train(args, train_loader, test_loader, encoder, generator, discriminator, pr
         if g_regularize:
             path_batch_size = max(1, args.batch // args.path_batch_shrink)
             _, feat_list = encoder(real_img)
+<<<<<<< HEAD
             fake_img, styles = generator(feat_list)
+=======
+            fake_img, styles, spaces = generator(feat_list)
+>>>>>>> parent of 6342df0... Revert "disent tried.."
 
             total_path_loss = 0
             mean_path_lengths = [0]*len(styles)

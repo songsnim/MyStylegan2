@@ -532,8 +532,6 @@ class Generator(nn.Module):
 
         self.n_latent = self.log_size*2 - 2  # 이미지 사이즈가 4,8,16,32면 n_latent는 0,1,2,3
 
-        self.get_bottleneck = nn.Linear(160, self.style_dim)
-
     def make_noise(self):
         device = self.input.input.device
         noises = [torch.randn(1, 1, 4, 4, device=device)]
@@ -542,6 +540,23 @@ class Generator(nn.Module):
                 noises.append(torch.randn(1, 1, 2**i, 2**i, device=device))
 
         return noises
+
+    # def get_space_from_feat(self, feat_list):
+    #     styles = []
+    #     i = 0
+    #     num_spaces = 3
+    #     # print(feat_list)
+    #     for idx in range(len(self.map_to_styles)):
+    #         for _ in range(num_spaces):
+    #             try:
+    #                 style = self.map_to_styles[idx](feat_list[idx])
+    #                 style = style.view(-1, self.style_dim)
+    #                 space = self.style_to_spaces[i](style)
+    #                 styles.append(space)
+    #                 i += 1
+    #             except:
+    #                 pass
+    #     return styles
 
     def get_style_from_feat(self, feat_list):
         styles = []
@@ -556,22 +571,15 @@ class Generator(nn.Module):
     def get_space_from_style(self, styles):
         spaces = []
         num_spaces = 3
-        # print(f"styles shape = {styles.shape}")
-        styles = self.get_bottleneck(styles)
-
-        for module in self.style_to_spaces:
-            space = module(styles)
-            spaces.append(space)
-
-        # i = 0
-        # for style in styles:
-        #     for _ in range(num_spaces):
-        #         try:
-        #             space = self.style_to_spaces[i](style)
-        #             spaces.append(space)
-        #             i += 1
-        #         except:
-        #             pass
+        i = 0
+        for style in styles:
+            for _ in range(num_spaces):
+                try:
+                    space = self.style_to_spaces[i](style)
+                    spaces.append(space)
+                    i += 1
+                except:
+                    pass
         return spaces
 
     def forward(
@@ -593,7 +601,6 @@ class Generator(nn.Module):
 
         if input_type == 'feat_list':
             styles = self.get_style_from_feat(feat_list)
-            styles = torch.cat(styles, dim=1)
             spaces = self.get_space_from_style(styles)
         elif input_type == 'styles':
             styles = feat_list
@@ -772,9 +779,9 @@ class Predictor(nn.Module):
 
         self.spaces = stylespaces
         self.ratio = ratio
-        # self.disc_latents_size = [32]*9 + [16]*3 + [8]*2
-        # self.disc_latents = sum(self.disc_latents_size)
-        self.disc_latents = 48
+        self.disc_latents_size = [32]*9 + [16]*3 + [8]*2
+        self.disc_latents = sum(self.disc_latents_size)
+        self.disc_latents = 160
         # for space in stylespaces:
         #     self.disc_latents += space.shape[1] * self.ratio
         self.classifier = nn.Sequential(
@@ -782,12 +789,14 @@ class Predictor(nn.Module):
             nn.Linear(128, 2), nn.Softmax()
         )
 
-    def forward(self, bottleneck):
-        # print(bottleneck.shape)
-        # print(bottleneck[:,:self.disc_latents].shape)
-        disc_latents = bottleneck[:, :self.disc_latents]
+    def forward(self, stylespaces):
+        latent = stylespaces[0][:, :self.disc_latents_size[0]]
+        for idx, space in enumerate(stylespaces):
+            if idx > 0:
+                next_space = space[:, :self.disc_latents_size[idx]]
+                latent = torch.cat([latent, next_space], dim=1)
 
-        return self.classifier(disc_latents)
+        return self.classifier(latent)
 
 
 class Disentangler(nn.Module):
