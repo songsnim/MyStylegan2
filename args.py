@@ -59,6 +59,6 @@ path_batch_shrink = 2
 
 py = False
 ipynb = True
-description = 'half noise_latent'
+description = 'dev input_noise debug'
 ckpt = None
 wandb = True
