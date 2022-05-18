@@ -124,15 +124,13 @@ def mixing_noise(batch, latent_dim, prob, device):
         return [make_noise(batch, latent_dim, 1, device)]
 
 
-def get_sample_for_log(test_image, encoder, generator, g_ema):
+def get_sample_for_log(test_image, input_noise, encoder, generator, g_ema):
     with torch.no_grad():
-        noise_input = torch.randn(
-            args.batch, args.latent, device="cuda:2")
         g_ema.eval()
         _, feat_list = encoder(test_image)
-        test_sample_ema, styles_ema, space_ema = g_ema(feat_list, noise_input)
+        test_sample_ema, styles_ema, space_ema = g_ema(feat_list, input_noise)
 
-        test_sample, styles, spaces = generator(feat_list, noise_input)
+        test_sample, styles, spaces = generator(feat_list, input_noise)
 
         sample = torch.cat([test_sample[:int(args.batch/2)],
                            test_image[:int(args.batch/2)]], dim=0)
@@ -151,15 +149,13 @@ def get_config_from_args(args):
     return output
 
 
-def get_accuracy(test_loader, encoder, generator, predictor, device):
+def get_accuracy(test_loader, input_noise, encoder, generator, predictor, device):
     correct = 0
     with torch.no_grad():
         for idx, (image, label) in enumerate(test_loader):
             image = image.to(device)
             label = label.to(device)
             _, feat_list = encoder(image)
-            input_noise = torch.randn(
-                args.batch, args.latent, device=f'cuda:{args.gpu_num}')
             _, styles, spaces = generator(feat_list, input_noise)
             P_pred = predictor(styles)
             # output에서 제일 큰 놈의 inredex를 반환한다(이경우에 0 or 1)
@@ -237,8 +233,8 @@ def train(args, train_loader, test_loader, encoder, generator, discriminator, pr
         requires_grad(predictor, False)
 
         _, feat_list = encoder(real_img)
-        noise = torch.randn(args.batch, args.latent, device=device)
-        fake_img, styles, spaces = generator(feat_list, noise)
+        input_noise = torch.randn(args.batch, args.latent, device=device)
+        fake_img, styles, spaces = generator(feat_list, input_noise)
 
         if args.augment:
             real_img_aug, _ = augment(real_img, ada_aug_prob)
@@ -293,9 +289,8 @@ def train(args, train_loader, test_loader, encoder, generator, discriminator, pr
         p_optim.zero_grad()
 
         _, fake_feat_list = encoder(fake_img)
-        noise = torch.randn(args.batch, args.latent, device=device)
-        fake_img, styles, spaces = generator(feat_list, noise)
-        _, fake_styles, fake_spaces = generator(fake_feat_list, noise)
+        fake_img, styles, spaces = generator(feat_list, input_noise)
+        _, fake_styles, fake_spaces = generator(fake_feat_list, input_noise)
         w1 = torch.tensor([1, 1, 1], device=device)
         recon_loss = w1[0]*img_recon_loss(fake_img, real_img) + \
             w1[1]*style_recon_loss(styles, fake_styles) + \
@@ -342,8 +337,7 @@ def train(args, train_loader, test_loader, encoder, generator, discriminator, pr
         if g_regularize:
             path_batch_size = max(1, args.batch // args.path_batch_shrink)
             _, feat_list = encoder(real_img)
-            noise = torch.randn(args.batch, args.latent, device=device)
-            fake_img, styles, spaces = generator(feat_list, noise)
+            fake_img, styles, spaces = generator(feat_list, input_noise)
 
             # for idx, (style, mean_path_length) in enumerate(zip(styles, mean_path_lengths)):
             #     path_loss, mean_path_length_output, path_lengths = g_path_regularize(
@@ -419,13 +413,13 @@ def train(args, train_loader, test_loader, encoder, generator, discriminator, pr
 
             if i % 100 == 0:
                 sample, sample_ema = get_sample_for_log(
-                    test_image, encoder, generator, g_ema)
+                    test_image, input_noise, encoder, generator, g_ema)
                 sample = wandb.Image(sample)
                 sample_ema = wandb.Image(sample_ema)
                 wandb.log({"G, test": sample,
                            "g_ema, test": sample_ema})
                 p_accuracy = get_accuracy(
-                    test_loader, encoder, generator, predictor, device)
+                    test_loader, input_noise, encoder, generator, predictor, device)
                 wandb.log({"Accuracy": p_accuracy})
 
             if i % 1000 == 0:

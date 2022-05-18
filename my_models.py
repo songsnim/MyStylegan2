@@ -798,9 +798,9 @@ class Predictor(nn.Module):
     def forward(self, bottleneck):
         # print(bottleneck.shape)
         # print(bottleneck[:,:self.disc_latents].shape)
-        # disc_latents = bottleneck[:, :self.disc_latents]
+        disc_latents = bottleneck[:, :self.disc_latents]
 
-        return self.classifier(bottleneck)
+        return self.classifier(disc_latents)
 
 
 class Disentangler(nn.Module):
