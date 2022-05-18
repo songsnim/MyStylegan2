@@ -125,11 +125,12 @@ if __name__ == '__main__':
 
     E = ResNet(return_features=True).to(device)
     E.load_state_dict(torch.load(
-        "pretrained/classifier/ResNet_64_parameters_smiling.pt"))
+        "pretrained/classifier/ResNet_64_parameters_smiling.pt", map_location=device))
     pred, feat_list = E(image.to(device))
     G = Generator(feat_list, size=args.img_size,
                   style_dim=args.latent).to(device)
-    _, styles, spaces = G(feat_list)
+    input_noise = torch.randn(args.batch, args.latent, device=device)
+    _, styles, spaces = G(feat_list, input_noise)
     D = Discriminator(args.img_size, args.latent).to(device)
     g_ema = Generator(feat_list, size=args.img_size,
                       style_dim=args.latent).to(device)

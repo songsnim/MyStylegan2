@@ -1,5 +1,6 @@
 import math
 import os
+import random
 
 import torch
 from torch import nn, autograd
@@ -93,7 +94,8 @@ def g_path_regularize(fake_img, style, mean_path_length, decay=0.01):
     grad, = autograd.grad(outputs=(fake_img * noise).sum(),
                           inputs=style, create_graph=True)
     # path length인 ||Jy||_2는 grad의 l2 norm이므로, 제곱의 합의 루트 (실제 구현할 때는 mean 추가)
-    path_lengths = torch.sqrt(grad.pow(2).sum().mean())
+    # print(grad.pow(2).sum(1))
+    path_lengths = torch.sqrt(grad.pow(2).sum(1).mean())
 
     # the long running exponential moving average of path length = a 구하기
     path_mean = mean_path_length + decay * \
@@ -105,12 +107,32 @@ def g_path_regularize(fake_img, style, mean_path_length, decay=0.01):
     return path_penalty, path_mean.detach(), path_lengths
 
 
+def make_noise(batch, latent_dim, n_noise, device):
+    if n_noise == 1:
+        return torch.randn(batch, latent_dim, device=device)
+
+    noises = torch.randn(n_noise, batch, latent_dim, device=device).unbind(0)
+
+    return noises
+
+
+def mixing_noise(batch, latent_dim, prob, device):
+    if prob > 0 and random.random() < prob:
+        return make_noise(batch, latent_dim, 2, device)
+
+    else:
+        return [make_noise(batch, latent_dim, 1, device)]
+
+
 def get_sample_for_log(test_image, encoder, generator, g_ema):
     with torch.no_grad():
+        noise_input = torch.randn(
+            args.batch, args.latent, device="cuda:2")
         g_ema.eval()
         _, feat_list = encoder(test_image)
-        test_sample_ema, styles_ema, space_ema = g_ema(feat_list)
-        test_sample, styles, spaces = generator(feat_list)
+        test_sample_ema, styles_ema, space_ema = g_ema(feat_list, noise_input)
+
+        test_sample, styles, spaces = generator(feat_list, noise_input)
 
         sample = torch.cat([test_sample[:int(args.batch/2)],
                            test_image[:int(args.batch/2)]], dim=0)
@@ -136,7 +158,9 @@ def get_accuracy(test_loader, encoder, generator, predictor, device):
             image = image.to(device)
             label = label.to(device)
             _, feat_list = encoder(image)
-            _, styles, spaces = generator(feat_list)
+            input_noise = torch.randn(
+                args.batch, args.latent, device=f'cuda:{args.gpu_num}')
+            _, styles, spaces = generator(feat_list, input_noise)
             P_pred = predictor(styles)
             # output에서 제일 큰 놈의 inredex를 반환한다(이경우에 0 or 1)
             prediction = P_pred.max(1, keepdim=True)[1]
@@ -213,7 +237,8 @@ def train(args, train_loader, test_loader, encoder, generator, discriminator, pr
         requires_grad(predictor, False)
 
         _, feat_list = encoder(real_img)
-        fake_img, styles, spaces = generator(feat_list)
+        noise = torch.randn(args.batch, args.latent, device=device)
+        fake_img, styles, spaces = generator(feat_list, noise)
 
         if args.augment:
             real_img_aug, _ = augment(real_img, ada_aug_prob)
@@ -268,7 +293,9 @@ def train(args, train_loader, test_loader, encoder, generator, discriminator, pr
         p_optim.zero_grad()
 
         _, fake_feat_list = encoder(fake_img)
-        _, fake_styles, fake_spaces = generator(fake_feat_list)
+        noise = torch.randn(args.batch, args.latent, device=device)
+        fake_img, styles, spaces = generator(feat_list, noise)
+        _, fake_styles, fake_spaces = generator(fake_feat_list, noise)
         w1 = torch.tensor([1, 1, 1], device=device)
         recon_loss = w1[0]*img_recon_loss(fake_img, real_img) + \
             w1[1]*style_recon_loss(styles, fake_styles) + \
@@ -283,7 +310,7 @@ def train(args, train_loader, test_loader, encoder, generator, discriminator, pr
         g_loss = g_nonsaturating_loss(fake_pred)
 
         loss_dict["g"] = g_loss
-
+        # print(f"styles shape = {styles.shape}")
         real_pred_label = predictor(styles)
 
         w2 = torch.tensor([1, 1], device=device)
@@ -315,29 +342,34 @@ def train(args, train_loader, test_loader, encoder, generator, discriminator, pr
         if g_regularize:
             path_batch_size = max(1, args.batch // args.path_batch_shrink)
             _, feat_list = encoder(real_img)
-            fake_img, styles, spaces = generator(feat_list)
+            noise = torch.randn(args.batch, args.latent, device=device)
+            fake_img, styles, spaces = generator(feat_list, noise)
 
-            total_path_loss = 0
-            mean_path_lengths = [0]*len(styles)
-            for idx, (style, mean_path_length) in enumerate(zip(styles, mean_path_lengths)):
-                path_loss, mean_path_length_output, path_lengths = g_path_regularize(
-                    fake_img, style, mean_path_length)
-                total_path_loss += path_loss
-                mean_path_lengths[idx] = mean_path_length_output
+            # for idx, (style, mean_path_length) in enumerate(zip(styles, mean_path_lengths)):
+            #     path_loss, mean_path_length_output, path_lengths = g_path_regularize(
+            #         fake_img, style, mean_path_length)
+            #     total_path_loss += path_loss
+            #     mean_path_lengths[idx] = mean_path_length_output
+
+            path_loss, mean_path_length, path_lengths = g_path_regularize(
+                fake_img, styles, mean_path_length
+            )
 
             generator.zero_grad()
-            weighted_path_loss = args.path_regularize * args.g_reg_every * total_path_loss
+            weighted_path_loss = args.path_regularize * args.g_reg_every * path_loss
 
             if args.path_batch_shrink:
                 weighted_path_loss += 0 * fake_img[0, 0, 0, 0]
 
             weighted_path_loss.backward()
+
             g_optim.step()
 
             mean_path_length_avg = (
-                reduce_sum(sum(mean_path_lengths)).item() / get_world_size())
+                reduce_sum(mean_path_length).item() / get_world_size()
+            )
 
-        loss_dict["path_loss"] = total_path_loss
+        loss_dict["path_loss"] = path_loss
         loss_dict["path_length"] = path_lengths.mean()
 
         if args.py:

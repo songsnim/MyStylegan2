@@ -37,13 +37,14 @@ gpu_num = 2  # gpu(A100) index
 iter = 800000  # total iteration
 start_iter = 0
 batch = 32
-latent = 32
+latent = 64
 img_size = 64
 center_crop = 50
 lr = 0.002
 train_path = "LMDB/CelebA/train"
 test_path = "LMDB/CelebA/test"
 
+mixing = 0.9
 disc_latent_ratio = 0.3
 augment_p = 0
 ada_target = 0.6
@@ -58,6 +59,6 @@ path_batch_shrink = 2
 
 py = False
 ipynb = True
-description = 'style reg, not space reg'
+description = 'half noise_latent'
 ckpt = None
 wandb = True
