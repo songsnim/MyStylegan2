@@ -5,7 +5,7 @@ from torch import autograd
 from torch.nn import functional as F
 import numpy as np
 
-from my_utils.distributed import reduce_sum
+from distributed import reduce_sum
 from op import upfirdn2d
 
 

@@ -93,11 +93,7 @@ def g_path_regularize(fake_img, style, mean_path_length, decay=0.01):
     grad, = autograd.grad(outputs=(fake_img * noise).sum(),
                           inputs=style, create_graph=True)
     # path length인 ||Jy||_2는 grad의 l2 norm이므로, 제곱의 합의 루트 (실제 구현할 때는 mean 추가)
-<<<<<<< HEAD
-    path_lengths = torch.sqrt(grad.pow(2).sum(0).mean())
-=======
     path_lengths = torch.sqrt(grad.pow(2).sum().mean())
->>>>>>> parent of 6342df0... Revert "disent tried.."
 
     # the long running exponential moving average of path length = a 구하기
     path_mean = mean_path_length + decay * \
@@ -113,8 +109,8 @@ def get_sample_for_log(test_image, encoder, generator, g_ema):
     with torch.no_grad():
         g_ema.eval()
         _, feat_list = encoder(test_image)
-        test_sample_ema, styles_ema = g_ema(feat_list)
-        test_sample, styles = generator(feat_list)
+        test_sample_ema, styles_ema, spaces_ema = g_ema(feat_list)
+        test_sample, styles, spaces = generator(feat_list)
 
         sample = torch.cat([test_sample[:int(args.batch/2)],
                            test_image[:int(args.batch/2)]], dim=0)
@@ -140,7 +136,7 @@ def get_accuracy(test_loader, encoder, generator, predictor, device):
             image = image.to(device)
             label = label.to(device)
             _, feat_list = encoder(image)
-            _, styles = generator(feat_list)
+            _, styles, _ = generator(feat_list)
             P_pred = predictor(styles)
             # output에서 제일 큰 놈의 index를 반환한다(이경우에 0 or 1)
             prediction = P_pred.max(1, keepdim=True)[1]
@@ -216,7 +212,7 @@ def train(args, train_loader, test_loader, encoder, generator, discriminator, pr
         requires_grad(predictor, False)
 
         _, feat_list = encoder(real_img)
-        fake_img, styles = generator(feat_list)
+        fake_img, styles, spaces = generator(feat_list)
 
         if args.augment:
             real_img_aug, _ = augment(real_img, ada_aug_prob)
@@ -270,10 +266,10 @@ def train(args, train_loader, test_loader, encoder, generator, discriminator, pr
         requires_grad(predictor, True)
 
         _, feat_list = encoder(real_img)
-        fake_img, styles = generator(feat_list)
+        fake_img, styles, spaces = generator(feat_list)
 
         _, fake_feat_list = encoder(fake_img)
-        _, fake_styles = generator(fake_feat_list)
+        _, fake_styles, fake_spaces = generator(fake_feat_list)
 
         w1 = torch.tensor([1, 1, 1], device=device)
         recon_loss = w1[0]*img_recon_loss(fake_img, real_img) + \
@@ -320,17 +316,13 @@ def train(args, train_loader, test_loader, encoder, generator, discriminator, pr
         if g_regularize:
             path_batch_size = max(1, args.batch // args.path_batch_shrink)
             _, feat_list = encoder(real_img)
-<<<<<<< HEAD
-            fake_img, styles = generator(feat_list)
-=======
             fake_img, styles, spaces = generator(feat_list)
->>>>>>> parent of 6342df0... Revert "disent tried.."
 
             total_path_loss = 0
             mean_path_lengths = [0]*len(styles)
-            for idx, (style, mean_path_length) in enumerate(zip(styles, mean_path_lengths)):
+            for idx, (space, mean_path_length) in enumerate(zip(spaces, mean_path_lengths)):
                 path_loss, mean_path_length_output, path_lengths = g_path_regularize(
-                    fake_img, style, mean_path_length)
+                    fake_img, space, mean_path_length)
                 total_path_loss += path_loss
                 mean_path_lengths[idx] = mean_path_length_output
 
