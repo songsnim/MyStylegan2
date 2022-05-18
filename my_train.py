@@ -93,7 +93,7 @@ def g_path_regularize(fake_img, style, mean_path_length, decay=0.01):
     grad, = autograd.grad(outputs=(fake_img * noise).sum(),
                           inputs=style, create_graph=True)
     # path length인 ||Jy||_2는 grad의 l2 norm이므로, 제곱의 합의 루트 (실제 구현할 때는 mean 추가)
-    path_lengths = torch.sqrt(grad.pow(2).sum().mean())
+    path_lengths = torch.sqrt(grad.pow(2).sum(2).mean(1))
 
     # the long running exponential moving average of path length = a 구하기
     path_mean = mean_path_length + decay * \
@@ -283,7 +283,7 @@ def train(args, train_loader, test_loader, encoder, generator, discriminator, pr
         g_loss = g_nonsaturating_loss(fake_pred)
 
         loss_dict["g"] = g_loss
-
+        # print(f"styles shape = {styles.shape}")
         real_pred_label = predictor(styles)
 
         w2 = torch.tensor([1, 1], device=device)
@@ -317,27 +317,31 @@ def train(args, train_loader, test_loader, encoder, generator, discriminator, pr
             _, feat_list = encoder(real_img)
             fake_img, styles, spaces = generator(feat_list)
 
-            total_path_loss = 0
-            mean_path_lengths = [0]*len(styles)
-            for idx, (style, mean_path_length) in enumerate(zip(styles, mean_path_lengths)):
-                path_loss, mean_path_length_output, path_lengths = g_path_regularize(
-                    fake_img, style, mean_path_length)
-                total_path_loss += path_loss
-                mean_path_lengths[idx] = mean_path_length_output
+            # for idx, (style, mean_path_length) in enumerate(zip(styles, mean_path_lengths)):
+            #     path_loss, mean_path_length_output, path_lengths = g_path_regularize(
+            #         fake_img, style, mean_path_length)
+            #     total_path_loss += path_loss
+            #     mean_path_lengths[idx] = mean_path_length_output
+
+            path_loss, mean_path_length, path_lengths = g_path_regularize(
+                fake_img, styles, mean_path_length
+            )
 
             generator.zero_grad()
-            weighted_path_loss = args.path_regularize * args.g_reg_every * total_path_loss
+            weighted_path_loss = args.path_regularize * args.g_reg_every * path_loss
 
             if args.path_batch_shrink:
                 weighted_path_loss += 0 * fake_img[0, 0, 0, 0]
 
             weighted_path_loss.backward()
+
             g_optim.step()
 
             mean_path_length_avg = (
-                reduce_sum(sum(mean_path_lengths)).item() / get_world_size())
+                reduce_sum(mean_path_length).item() / get_world_size()
+            )
 
-        loss_dict["path_loss"] = total_path_loss
+        loss_dict["path_loss"] = path_loss
         loss_dict["path_length"] = path_lengths.mean()
 
         if args.py:

@@ -125,7 +125,7 @@ if __name__ == '__main__':
 
     E = ResNet(return_features=True).to(device)
     E.load_state_dict(torch.load(
-        "pretrained/classifier/ResNet_64_parameters_smiling.pt"))
+        "pretrained/classifier/ResNet_64_parameters_smiling.pt", map_location=device))
     pred, feat_list = E(image.to(device))
     G = Generator(feat_list, size=args.img_size,
                   style_dim=args.latent).to(device)
