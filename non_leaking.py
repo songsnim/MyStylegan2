@@ -5,7 +5,7 @@ from torch import autograd
 from torch.nn import functional as F
 import numpy as np
 
-from distributed import reduce_sum
+from my_utils.distributed import reduce_sum
 from op import upfirdn2d
 
 
@@ -112,7 +112,8 @@ def rotate3d_mat(axis, theta):
     u_x, u_y, u_z = axis
 
     eye = torch.eye(3).unsqueeze(0)
-    cross = torch.tensor([(0, -u_z, u_y), (u_z, 0, -u_x), (-u_y, u_x, 0)]).unsqueeze(0)
+    cross = torch.tensor([(0, -u_z, u_y), (u_z, 0, -u_x),
+                         (-u_y, u_x, 0)]).unsqueeze(0)
     outer = torch.tensor(axis)
     outer = (outer.unsqueeze(1) * outer).unsqueeze(0)
 
@@ -312,7 +313,8 @@ def get_padding(G, height, width, kernel_size):
 
     pad = cp[:, :2, :].permute(1, 0, 2).flatten(1)
     pad = torch.cat((-pad, pad)).max(1).values
-    pad = pad + torch.tensor([pad_k * 2 - cx, pad_k * 2 - cy] * 2, device=device)
+    pad = pad + torch.tensor([pad_k * 2 - cx, pad_k *
+                             2 - cy] * 2, device=device)
     pad = pad.max(torch.tensor([0, 0] * 2, device=device))
     pad = pad.min(torch.tensor([width - 1, height - 1] * 2, device=device))
 
@@ -329,7 +331,8 @@ def try_sample_affine_and_pad(img, p, kernel_size, G=None):
     if G is None:
         G_try = torch.inverse(sample_affine(p, batch, height, width))
 
-    pad_x1, pad_x2, pad_y1, pad_y2 = get_padding(G_try, height, width, kernel_size)
+    pad_x1, pad_x2, pad_y1, pad_y2 = get_padding(
+        G_try, height, width, kernel_size)
 
     img_pad = F.pad(img, (pad_x1, pad_x2, pad_y1, pad_y2), mode="reflect")
 
@@ -349,7 +352,8 @@ class GridSampleForward(autograd.Function):
     @staticmethod
     def backward(ctx, grad_output):
         input, grid = ctx.saved_tensors
-        grad_input, grad_grid = GridSampleBackward.apply(grad_output, input, grid)
+        grad_input, grad_grid = GridSampleBackward.apply(
+            grad_output, input, grid)
 
         return grad_input, grad_grid
 
@@ -358,7 +362,8 @@ class GridSampleBackward(autograd.Function):
     @staticmethod
     def forward(ctx, grad_output, input, grid):
         op = torch._C._jit_get_operation("aten::grid_sampler_2d_backward")
-        grad_input, grad_grid = op(grad_output, input, grid, 0, 0, False)
+        grad_input, grad_grid = op(
+            grad_output, input, grid, 0, 0, False)
         ctx.save_for_backward(grid)
 
         return grad_input, grad_grid
@@ -398,7 +403,8 @@ def random_apply_affine(img, p, G=None, antialiasing_kernel=SYM6):
     )
 
     G_inv = (
-        translate_mat_single((pad_x1 - pad_x2).item() / 2, (pad_y1 - pad_y2).item() / 2)
+        translate_mat_single((pad_x1 - pad_x2).item() / 2,
+                             (pad_y1 - pad_y2).item() / 2)
         @ G
     )
     up_pad = (
@@ -407,19 +413,24 @@ def random_apply_affine(img, p, G=None, antialiasing_kernel=SYM6):
         (len_k + 2 - 1) // 2,
         (len_k - 2) // 2,
     )
-    img_2x = upfirdn2d(img_pad, kernel.unsqueeze(0), up=(2, 1), pad=(*up_pad[:2], 0, 0))
-    img_2x = upfirdn2d(img_2x, kernel.unsqueeze(1), up=(1, 2), pad=(0, 0, *up_pad[2:]))
+    img_2x = upfirdn2d(img_pad, kernel.unsqueeze(
+        0), up=(2, 1), pad=(*up_pad[:2], 0, 0))
+    img_2x = upfirdn2d(img_2x, kernel.unsqueeze(
+        1), up=(1, 2), pad=(0, 0, *up_pad[2:]))
     G_inv = scale_mat_single(2, 2) @ G_inv @ scale_mat_single(1 / 2, 1 / 2)
-    G_inv = translate_mat_single(-0.5, -0.5) @ G_inv @ translate_mat_single(0.5, 0.5)
+    G_inv = translate_mat_single(-0.5, -
+                                 0.5) @ G_inv @ translate_mat_single(0.5, 0.5)
     batch_size, channel, height, width = img.shape
     pad_k = len_k // 4
-    shape = (batch_size, channel, (height + pad_k * 2) * 2, (width + pad_k * 2) * 2)
+    shape = (batch_size, channel, (height + pad_k * 2)
+             * 2, (width + pad_k * 2) * 2)
     G_inv = (
         scale_mat_single(2 / img_2x.shape[3], 2 / img_2x.shape[2])
         @ G_inv
         @ scale_mat_single(1 / (2 / shape[3]), 1 / (2 / shape[2]))
     )
-    grid = F.affine_grid(G_inv[:, :2, :].to(img_2x), shape, align_corners=False)
+    grid = F.affine_grid(G_inv[:, :2, :].to(
+        img_2x), shape, align_corners=False)
     img_affine = grid_sample(img_2x, grid)
     d_p = -pad_k * 2
     down_pad = (

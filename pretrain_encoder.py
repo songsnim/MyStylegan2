@@ -139,8 +139,10 @@ def evaluate(model, test_loader):
 
 
 if __name__ == '__main__':
-
-    print('GPU device :', device)
+    device = torch.device(
+        f"cuda:{args.gpu_num}" if torch.cuda.is_available() else 'cpu')
+    torch.cuda.set_device(device)  # change allocation of current GPU
+    print(f'cuda device : {device}')
 
     my_transform = transforms.Compose(
         [
