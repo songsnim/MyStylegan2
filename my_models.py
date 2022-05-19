@@ -508,7 +508,7 @@ class Generator(nn.Module):
         for idx, res in enumerate(list(self.channels.keys())):
             for _ in range(3):
                 modulation = EqualLinear(
-                    int(self.style_dim*2), self.channels[res])
+                    int(self.style_dim), self.channels[res])
                 self.style_to_spaces.append(modulation)
 
         self.style_to_spaces = self.style_to_spaces[:-1]
@@ -587,7 +587,6 @@ class Generator(nn.Module):
     def forward(
         self,
         feat_list,
-        input_noise,
         input_type='feat_list',
         return_latents=True,
         inject_index=None,
@@ -596,7 +595,7 @@ class Generator(nn.Module):
         randomize_noise=True,
     ):
 
-        noise_latent = self.mapping(input_noise)
+        # noise_latent = self.mapping(input_noise)
         if noise is None:
             if randomize_noise:
                 noise = [None] * self.layer_indices
@@ -606,7 +605,7 @@ class Generator(nn.Module):
 
         if input_type == 'feat_list':
             styles = self.get_style_from_feat(feat_list)
-            styles = torch.cat([styles, noise_latent], dim=1)
+            # styles = torch.cat([styles, noise_latent], dim=1)
             spaces = self.get_space_from_style(styles)
         elif input_type == 'styles':
             styles = feat_list
@@ -780,25 +779,27 @@ class Discriminator(nn.Module):
 
 
 class Predictor(nn.Module):
-    def __init__(self, stylespaces, ratio):
+    def __init__(self, stylespaces, latent_dim, disc_ratio):
         super().__init__()
 
         self.spaces = stylespaces
-        self.ratio = ratio
+        self.ratio = disc_ratio
         # self.disc_latents_size = [32]*9 + [16]*3 + [8]*2
         # self.disc_latents = sum(self.disc_latents_size)
-        self.disc_latents = 64
+        self.bottleneck_dim = latent_dim
         # for space in stylespaces:
         #     self.disc_latents += space.shape[1] * self.ratio
         self.classifier = nn.Sequential(
-            nn.Linear(self.disc_latents, 128, bias=True), nn.ReLU(),
+            nn.Linear(int(self.bottleneck_dim * self.ratio),
+                      128, bias=True), nn.ReLU(),
             nn.Linear(128, 2), nn.Softmax()
         )
 
     def forward(self, bottleneck):
-        # print(bottleneck.shape)
-        # print(bottleneck[:,:self.disc_latents].shape)
-        disc_latents = bottleneck[:, :self.disc_latents]
+        disc_latents = bottleneck[:, :int(self.bottleneck_dim*self.ratio)]
+
+        assert bottleneck.shape[1] == self.bottleneck_dim, \
+            f'bottle shape {bottleneck.shape},  classifier node {self.bottleneck_dim}'
 
         return self.classifier(disc_latents)
 

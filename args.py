@@ -44,8 +44,7 @@ lr = 0.002
 train_path = "LMDB/CelebA/train"
 test_path = "LMDB/CelebA/test"
 
-mixing = 0.9
-disc_latent_ratio = 0.3
+disc_latent_ratio = 0.5
 augment_p = 0
 ada_target = 0.6
 ada_length = 500*1000
@@ -56,9 +55,10 @@ g_reg_every = 16
 r1 = 10
 path_regularize = 2
 path_batch_shrink = 2
+space_reg = True
 
 py = False
 ipynb = True
-description = 'dev input_noise debug'
+description = 'bottle + space reg + 0.5 ratio'
 ckpt = None
 wandb = True

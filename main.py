@@ -129,12 +129,11 @@ if __name__ == '__main__':
     pred, feat_list = E(image.to(device))
     G = Generator(feat_list, size=args.img_size,
                   style_dim=args.latent).to(device)
-    input_noise = torch.randn(args.batch, args.latent, device=device)
-    _, styles, spaces = G(feat_list, input_noise)
+    _, styles, spaces = G(feat_list)
     D = Discriminator(args.img_size, args.latent).to(device)
     g_ema = Generator(feat_list, size=args.img_size,
                       style_dim=args.latent).to(device)
-    P = Predictor(styles, args.disc_latent_ratio).to(device)
+    P = Predictor(styles, args.latent, args.disc_latent_ratio).to(device)
 
     g_ema.eval()
     accumulate(g_ema, G, 0)
