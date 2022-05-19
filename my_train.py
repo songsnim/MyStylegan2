@@ -364,12 +364,11 @@ def train(args, train_loader, test_loader, encoder, generator, discriminator, pr
             g_optim.step()
 
             mean_path_length_avg = (
-                reduce_sum(mean_path_length) / get_world_size()
+                reduce_sum(sum(mean_path_length).item()) / get_world_size()
             )
 
         loss_dict["path_loss"] = total_path_loss
-        loss_dict["path_length"] = sum(
-            mean_path_lengths)/len(mean_path_lengths)
+        loss_dict["path_length"] = mean_path_length_avg
 
         if args.py:
             accumulate(g_ema, g_module, accum)
