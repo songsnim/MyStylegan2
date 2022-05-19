@@ -787,7 +787,7 @@ class Predictor(nn.Module):
         self.ratio = ratio
         # self.disc_latents_size = [32]*9 + [16]*3 + [8]*2
         # self.disc_latents = sum(self.disc_latents_size)
-        self.disc_latents = 48
+        self.disc_latents = 128
         # for space in stylespaces:
         #     self.disc_latents += space.shape[1] * self.ratio
         self.classifier = nn.Sequential(
