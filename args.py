@@ -59,6 +59,6 @@ space_reg = True
 
 py = False
 ipynb = True
-description = 'bottle + space reg debug + 0.5 ratio'
+description = 'bottle + space reg debug2 + 0.5 ratio'
 ckpt = None
 wandb = True

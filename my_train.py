@@ -116,7 +116,8 @@ def g_path_regularize_for_space(fake_img, spaces, mean_path_length, decay=0.01):
     grad = []
     for space in spaces:
         partial_grad, = autograd.grad(outputs=(fake_img * noise).sum(),
-                                      inputs=space, create_graph=True)
+                                      inputs=space,
+                                      create_graph=True, retain_graph=True, allow_unused=True)
         grad.append(partial_grad)
 
     grad = torch.cat(grad, dim=1)
@@ -435,8 +436,8 @@ def train(args, train_loader, test_loader, encoder, generator, discriminator, pr
             _, feat_list = encoder(real_img)
             fake_img, styles, spaces = generator(feat_list)
 
-            path_loss, mean_path_length, path_lengths = g_path_regularize(
-                fake_img, styles, mean_path_length
+            path_loss, mean_path_length, path_lengths = g_path_regularize_for_space(
+                fake_img, spaces, mean_path_length
             )
 
             generator.zero_grad()
